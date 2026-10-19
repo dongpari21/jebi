@@ -1,9 +1,9 @@
-import { randomInt, shuffle, sample, pick } from './random.js?v=4';
-import { burst } from './confetti.js?v=4';
+import { randomInt, shuffle, sample, pick } from './random.js?v=5';
+import { burst } from './confetti.js?v=5';
 import {
   $, $$, reduceMotion, escapeHtml, toBase64Url, fromBase64Url, readHash, copyText, toast,
-} from './utils.js?v=4';
-import { initRemoteManitto } from './manitto-remote.js?v=4';
+} from './utils.js?v=5';
+import { initRoomManitto } from './manitto-room.js?v=5';
 
 /* ==========================================================================
    State
@@ -643,7 +643,7 @@ function initManitto() {
   });
 
   renderManitto();
-  initRemoteManitto({ setTab, openManittoDialog });
+  initRoomManitto({ setTab, openManittoDialog, getMode: () => state.manitto.mode });
 }
 
 /* ==========================================================================

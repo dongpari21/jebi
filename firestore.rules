@@ -1,0 +1,57 @@
+rules_version = '2';
+
+// 마니또 방 보안 규칙
+// - 방 ID를 아는 사람(초대 링크)만 방과 참가자 명단을 볼 수 있다. 방 목록 조회는 불가.
+// - 참가자는 자기 이름만 등록·수정·삭제할 수 있고, 방이 닫히면 더 이상 바꿀 수 없다.
+// - 배정 결과(secrets)는 본인만 읽을 수 있다. 진행자도 남의 결과는 읽을 수 없다.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /rooms/{roomId} {
+      function signedIn() { return request.auth != null; }
+      function room() { return get(/databases/$(database)/documents/rooms/$(roomId)).data; }
+      function isOwner() { return signedIn() && request.auth.uid == room().ownerUid; }
+      function isOpen() { return room().status == 'open'; }
+
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['title', 'ownerUid', 'status', 'createdAt'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.status == 'open'
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 30;
+      // 진행자는 방을 닫을 수만 있다 (open → done)
+      allow update: if signedIn()
+        && request.auth.uid == resource.data.ownerUid
+        && resource.data.status == 'open'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status == 'done';
+
+      match /members/{uid} {
+        function validName() {
+          return request.resource.data.name is string
+            && request.resource.data.name.size() >= 1
+            && request.resource.data.name.size() <= 20;
+        }
+        allow read: if signedIn();
+        allow create: if signedIn() && request.auth.uid == uid && isOpen()
+          && request.resource.data.keys().hasOnly(['name', 'joinedAt']) && validName();
+        allow update: if signedIn() && request.auth.uid == uid && isOpen()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']) && validName();
+        allow delete: if (signedIn() && request.auth.uid == uid || isOwner()) && isOpen();
+      }
+
+      match /secrets/{uid} {
+        allow get: if signedIn() && request.auth.uid == uid;
+        allow list: if false;
+        // 진행자가 방을 닫는 일괄 쓰기에서만, 실제 참가자에게만 쓸 수 있다
+        allow create: if isOwner() && isOpen()
+          && getAfter(/databases/$(database)/documents/rooms/$(roomId)).data.status == 'done'
+          && exists(/databases/$(database)/documents/rooms/$(roomId)/members/$(uid))
+          && request.resource.data.keys().hasOnly(['target', 'title']);
+        allow update, delete: if false;
+      }
+    }
+  }
+}
