@@ -1,8 +1,8 @@
 // 마니또 온라인 방: 진행자가 방을 만들고 → 참가자가 초대 링크로 입장 → 진행자가 구성 완료하면
 // 각 참가자는 자기 마니또만 확인할 수 있다.
-import { shuffle } from './random.js?v=5';
-import { $, escapeHtml, pageUrl, shareOrCopy, toast } from './utils.js?v=5';
-import * as api from './room-api.js?v=5';
+import { shuffle } from './random.js?v=6';
+import { $, escapeHtml, pageUrl, shareOrCopy, toast } from './utils.js?v=6';
+import * as api from './room-api.js?v=6';
 
 const ADMIN_KEY = 'jebi:room';
 const MIN_MEMBERS = 3;
@@ -84,7 +84,7 @@ function renderAdmin() {
   const grid = $('#room-members');
   if (!hasRoom) {
     $('#room-status').innerHTML = '';
-    grid.innerHTML = `<div class="empty"><span class="empty-emoji" aria-hidden="true">🏠</span>
+    grid.innerHTML = `<div class="empty"><span class="empty-emoji" aria-hidden="true">💌</span>
       <p>방을 만들고 초대 링크를 보내면<br>입장한 사람이 여기에 실시간으로 보여요.</p></div>`;
     return;
   }
@@ -358,17 +358,16 @@ async function startGuest(roomId) {
 /* ==========================================================================
    진입점
    ========================================================================== */
+/** 초대 링크(?room=ID)로 열었으면 참가자 화면을 띄우고 true를 돌려준다 */
 export function initRoomManitto(options) {
   deps = options;
   const roomId = new URLSearchParams(location.search).get('room');
   if (roomId && /^[a-z0-9]{6,20}$/.test(roomId)) {
     startGuest(roomId);
-    return;
+    return true;
   }
-  // 진행자 화면은 '온라인 방'을 고를 때만 Firebase를 불러온다
-  if (deps.getMode() === 'remote') initAdmin();
-  else renderAdmin();
-  for (const radio of document.querySelectorAll('input[name="manitto-mode"]')) {
-    radio.addEventListener('change', () => { if (radio.checked && radio.value === 'remote') initAdmin(); });
-  }
+  return false;
 }
+
+/** 진행자 화면. 온라인 방 탭을 처음 열 때 Firebase를 불러온다. */
+export const activateRoomAdmin = () => initAdmin();

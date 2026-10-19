@@ -17,7 +17,7 @@ resize();
 
 function palette() {
   const s = getComputedStyle(document.documentElement);
-  return ['--t0', '--t1', '--t2', '--t3', '--t4', '--t6'].map((v) => s.getPropertyValue(v).trim());
+  return [...['--accent', '--green', '--gold'].map((v) => s.getPropertyValue(v).trim()), '#E98A9A', '#7C9BEA'];
 }
 
 export function burst(x = innerWidth / 2, y = innerHeight / 3, count = 110) {

@@ -24,12 +24,3 @@ export function shuffle(list) {
   }
   return a;
 }
-
-/** 중복 없이 k개 뽑기 */
-export function sample(list, k) {
-  return shuffle(list).slice(0, k);
-}
-
-export function pick(list) {
-  return list[randomInt(list.length)];
-}

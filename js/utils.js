@@ -8,21 +8,6 @@ export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-export function toBase64Url(bytes) {
-  let bin = '';
-  bytes.forEach((b) => { bin += String.fromCharCode(b); });
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-export const fromBase64Url = (str) =>
-  Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
-
-/** location.hash가 `#prefix=값` 형태면 값을 돌려준다 */
-export function readHash(prefix) {
-  const m = location.hash.match(new RegExp(`^#${prefix}=([\\w-]+)$`));
-  return m ? m[1] : null;
-}
-
 export const pageUrl = () => `${location.origin}${location.pathname}`;
 
 export async function copyText(text) {
