@@ -80,24 +80,26 @@ function escapeHtml(s) {
 /* ==========================================================================
    Share link (#s=base64url(JSON))
    ========================================================================== */
-function encodeShare(obj) {
-  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+function toBase64Url(bytes) {
   let bin = '';
   bytes.forEach((b) => { bin += String.fromCharCode(b); });
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
+const fromBase64Url = (str) => Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+const jsonToBytes = (obj) => new TextEncoder().encode(JSON.stringify(obj));
+const bytesToJson = (bytes) => JSON.parse(new TextDecoder().decode(bytes));
+
+const encodeShare = (obj) => toBase64Url(jsonToBytes(obj));
+
+function readHash(prefix) {
+  const m = location.hash.match(new RegExp(`^#${prefix}=([\\w-]+)$`));
+  return m ? m[1] : null;
+}
 
 function readShareHash() {
-  const m = location.hash.match(/^#s=([\w-]+)$/);
-  if (!m) return null;
-  try {
-    const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
-    const bin = atob(b64);
-    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    return JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    return null;
-  }
+  const data = readHash('s');
+  if (!data) return null;
+  try { return bytesToJson(fromBase64Url(data)); } catch { return null; }
 }
 
 async function copyText(text) {
@@ -166,7 +168,7 @@ function initTabs() {
   });
   addEventListener('resize', moveIndicator);
   document.fonts?.ready.then(moveIndicator);
-  setTab(state.tab in { board: 1, names: 1, teams: 1 } ? state.tab : 'board');
+  setTab(state.tab in { board: 1, names: 1, teams: 1, manitto: 1 } ? state.tab : 'board');
 }
 
 /* ==========================================================================
@@ -229,6 +231,7 @@ function initBindings() {
       drawn = drawn.filter((n) => parsePeople().includes(n));
       renderPeopleCount();
       renderPool();
+      renderManitto();
       save();
     });
   }
@@ -529,6 +532,192 @@ function initTeams() {
 }
 
 /* ==========================================================================
+   마니또
+   참가자를 섞은 순서대로 원형으로 이어서(A→B→C→…→A) 배정한다.
+   n!개의 순서가 (n-1)!개의 원형 배치에 n개씩 대응하므로 모든 배치가 균등하게 나오고,
+   자기 자신이나 서로를 챙기는 쌍(n≥3일 때)은 생기지 않는다.
+   ========================================================================== */
+const MANITTO_KEY = 'jebi:manitto';
+// 개인 링크에서 이름이 그대로 읽히지 않도록 가볍게 섞는 용도 (암호화가 아님)
+const LINK_KEY = new TextEncoder().encode('jebi-manitto');
+const scramble = (bytes) => bytes.map((b, i) => b ^ LINK_KEY[i % LINK_KEY.length]);
+
+let manitto = loadManitto(); // { people, order, checked } | null
+let manittoRevealed = false;
+let dialogDone = null;
+
+function loadManitto() {
+  try {
+    const m = JSON.parse(localStorage.getItem(MANITTO_KEY) || 'null');
+    return m && Array.isArray(m.people) && Array.isArray(m.order) ? { checked: [], ...m } : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveManitto() {
+  try {
+    if (manitto) localStorage.setItem(MANITTO_KEY, JSON.stringify(manitto));
+    else localStorage.removeItem(MANITTO_KEY);
+  } catch {}
+}
+
+const manittoStale = () => !!manitto && manitto.people.join('\n') !== parsePeople().join('\n');
+
+function targetOf(name) {
+  const { order } = manitto;
+  return order[(order.indexOf(name) + 1) % order.length];
+}
+
+function makeManitto() {
+  const people = parsePeople();
+  if (people.length < 3) {
+    toast('마니또는 3명 이상부터 정할 수 있어요');
+    return;
+  }
+  const dup = people.find((p, i) => people.indexOf(p) !== i);
+  if (dup) {
+    toast(`같은 이름이 두 번 있어요: ${dup}`);
+    return;
+  }
+  if (manitto && !manittoStale() && manitto.checked.length
+    && !confirm('이미 결과를 확인한 사람이 있어요. 마니또를 새로 정할까요?')) return;
+
+  manitto = { people, order: shuffle(people), checked: [] };
+  manittoRevealed = false;
+  saveManitto();
+  renderManitto();
+  toast('마니또를 정했어요! 한 명씩 몰래 확인해 보세요');
+}
+
+function renderManitto() {
+  const grid = $('#manitto-grid');
+  const chain = $('#manitto-chain');
+  const stale = manittoStale();
+  $('#manitto-head').hidden = !manitto;
+  $('#manitto-make').textContent = manitto ? '마니또 다시 정하기' : '마니또 정하기';
+  $('#manitto-reveal-all').disabled = !manitto || stale;
+  $('#manitto-reveal-all').textContent = manittoRevealed ? '전체 결과 숨기기' : '전체 결과 보기';
+
+  if (!manitto) {
+    grid.innerHTML = '<div class="empty"><span class="empty-emoji" aria-hidden="true">🎁</span><p>참가자를 3명 이상 입력하고 <b>마니또 정하기</b>를 눌러보세요.</p></div>';
+    chain.hidden = true;
+    return;
+  }
+
+  const total = manitto.people.length;
+  const done = manitto.checked.length;
+  $('#manitto-status').innerHTML = stale
+    ? '<span class="warn">참가자 목록이 바뀌었어요. 마니또를 다시 정해 주세요.</span>'
+    : `<span>확인 완료 <b>${done}</b> / ${total}</span>${done === total ? '<span class="done">모두 확인했어요 🎁</span>' : ''}`;
+  $('#manitto-progress').style.width = stale ? '0' : `${(done / total) * 100}%`;
+
+  // 섞인 순서(order)를 노출하면 배정이 드러나므로 입력 순서대로 보여준다
+  grid.innerHTML = manitto.people.map((name, i) => {
+    const checked = manitto.checked.includes(name);
+    const n = escapeHtml(name);
+    return `<article class="m-card${checked ? ' is-checked' : ''}" style="--i:${i}">
+      <span class="m-avatar" aria-hidden="true">${checked ? '✓' : escapeHtml([...name][0])}</span>
+      <span class="m-info"><span class="m-name">${n}</span><span class="m-state">${checked ? '확인함' : '확인 전'}</span></span>
+      <span class="m-actions">
+        <button class="btn btn-sm btn-primary" type="button" data-act="open" data-name="${n}" ${stale ? 'disabled' : ''}>확인</button>
+        <button class="btn btn-sm btn-icon btn-ghost" type="button" data-act="link" data-name="${n}" title="개인 링크 복사" aria-label="${n}님 개인 링크 복사" ${stale ? 'disabled' : ''}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1 1M14 10a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1-1"/></svg>
+        </button>
+      </span>
+    </article>`;
+  }).join('');
+
+  chain.hidden = !manittoRevealed || stale;
+  if (!chain.hidden) {
+    chain.innerHTML = `<h3 class="mini-title">전체 결과 · 왼쪽 사람이 오른쪽 사람을 몰래 챙겨요</h3>
+      <ol class="m-chain">${manitto.people.map((n) => `
+        <li><b>${escapeHtml(n)}</b><span class="arrow" aria-label="이(가) 챙길 사람">→</span><span>${escapeHtml(targetOf(n))}</span></li>`).join('')}
+      </ol>`;
+  }
+}
+
+function openManittoDialog(giver, target, onDone) {
+  const dialog = $('#manitto-dialog');
+  for (const el of $$('.m-who', dialog)) el.textContent = giver;
+  $('.m-target', dialog).textContent = target;
+  $('[data-step="1"]', dialog).hidden = false;
+  $('[data-step="2"]', dialog).hidden = true;
+  dialogDone = onDone;
+  dialog.showModal();
+}
+
+function personalLink(name) {
+  const payload = toBase64Url(scramble(jsonToBytes({ g: name, t: targetOf(name) })));
+  return `${location.origin}${location.pathname}#m=${payload}`;
+}
+
+function openLinkFromHash() {
+  const data = readHash('m');
+  if (!data) return;
+  window.history.replaceState(null, '', location.pathname + location.search);
+  try {
+    const { g, t } = bytesToJson(scramble(fromBase64Url(data)));
+    if (typeof g === 'string' && typeof t === 'string') {
+      setTab('manitto');
+      openManittoDialog(g, t, null);
+      return;
+    }
+  } catch {}
+  toast('마니또 링크가 올바르지 않아요');
+}
+
+function initManitto() {
+  $('#manitto-make').addEventListener('click', makeManitto);
+  $('#manitto-reveal-all').addEventListener('click', () => {
+    if (!manittoRevealed && !confirm('모든 사람의 마니또가 화면에 공개돼요. 계속할까요?')) return;
+    manittoRevealed = !manittoRevealed;
+    renderManitto();
+  });
+
+  $('#manitto-grid').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn || manittoStale()) return;
+    const name = btn.dataset.name;
+    if (btn.dataset.act === 'open') {
+      openManittoDialog(name, targetOf(name), () => {
+        if (!manitto.checked.includes(name)) manitto.checked.push(name);
+        saveManitto();
+        renderManitto();
+      });
+    } else {
+      const ok = await copyText(personalLink(name));
+      toast(ok ? `${name}님 링크를 복사했어요. 본인에게만 보내주세요` : '복사에 실패했어요');
+    }
+  });
+
+  const dialog = $('#manitto-dialog');
+  dialog.addEventListener('click', (e) => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'reveal') {
+      $('[data-step="1"]', dialog).hidden = true;
+      $('[data-step="2"]', dialog).hidden = false;
+      $('[data-act="done"]', dialog).focus();
+      const r = $('.m-paper', dialog).getBoundingClientRect();
+      setTimeout(() => burst(r.left + r.width / 2, r.top + r.height / 2, 80), reduceMotion.matches ? 0 : 350);
+    } else if (act === 'done') {
+      dialogDone?.();
+      dialog.close();
+    } else if (act === 'close') {
+      dialog.close();
+    }
+  });
+  // 닫힐 때는 항상 결과를 지워 다음 사람이 보지 못하게 한다
+  dialog.addEventListener('close', () => {
+    $('.m-target', dialog).textContent = '';
+    dialogDone = null;
+  });
+
+  renderManitto();
+  openLinkFromHash();
+}
+
+/* ==========================================================================
    Top bar: share + theme
    ========================================================================== */
 function initTopbar() {
@@ -556,4 +745,5 @@ initTabs();
 initBoard();
 initNames();
 initTeams();
+initManitto();
 initTopbar();

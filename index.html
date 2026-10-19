@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>제비뽑기 — 공정한 랜덤 뽑기</title>
-  <meta name="description" content="당첨/꽝 뽑기판, 이름 뽑기, 팀 나누기를 한 곳에서. 암호학적 난수로 공정하게 뽑는 웹 제비뽑기.">
+  <meta name="description" content="당첨/꽝 뽑기판, 이름 뽑기, 팀 나누기, 마니또를 한 곳에서. 암호학적 난수로 공정하게 뽑는 웹 제비뽑기.">
   <meta name="theme-color" content="#F3EEE4">
   <meta property="og:title" content="제비뽑기 — 공정한 랜덤 뽑기">
-  <meta property="og:description" content="당첨/꽝 뽑기판, 이름 뽑기, 팀 나누기를 한 곳에서.">
+  <meta property="og:description" content="당첨/꽝 뽑기판, 이름 뽑기, 팀 나누기, 마니또를 한 곳에서.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="https://dongpari21.github.io/jebi/assets/preview.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
@@ -40,7 +40,7 @@
   <main class="wrap">
     <section class="hero">
       <h1>오늘의 운, <em>공정하게</em> 뽑아요</h1>
-      <p>뽑기판에서 한 장씩 펼치거나, 이름을 뽑거나, 팀을 나눠보세요.<br class="br-desktop"> 모든 결과는 브라우저의 암호학적 난수로 정해집니다.</p>
+      <p>제비를 한 장씩 펼치거나, 이름을 뽑거나, 팀을 나누거나, 마니또를 정해보세요.<br class="br-desktop"> 모든 결과는 브라우저의 암호학적 난수로 정해집니다.</p>
     </section>
 
     <nav class="tabs" role="tablist" aria-label="뽑기 종류">
@@ -52,6 +52,9 @@
       </button>
       <button class="tab" role="tab" id="tab-teams" aria-controls="panel-teams" data-tab="teams">
         <span class="tab-emoji" aria-hidden="true">🧩</span>팀 나누기
+      </button>
+      <button class="tab" role="tab" id="tab-manitto" aria-controls="panel-manitto" data-tab="manitto">
+        <span class="tab-emoji" aria-hidden="true">🎁</span>마니또
       </button>
       <span class="tab-indicator" aria-hidden="true"></span>
     </nav>
@@ -186,7 +189,7 @@
       <aside class="card settings">
         <h2 class="card-title">참가자</h2>
         <div class="field">
-          <label for="teams-people">이름 <small>이름 뽑기 탭과 공유돼요</small></label>
+          <label for="teams-people">이름 <small>다른 탭과 공유돼요</small></label>
           <textarea id="teams-people" class="people-input" rows="8" spellcheck="false"></textarea>
           <p class="hint people-count"></p>
         </div>
@@ -213,12 +216,61 @@
         </div>
       </div>
     </section>
+
+    <!-- 마니또 -->
+    <section class="panel" role="tabpanel" id="panel-manitto" aria-labelledby="tab-manitto" hidden>
+      <aside class="card settings">
+        <h2 class="card-title">참가자</h2>
+        <div class="field">
+          <label for="manitto-people">이름 <small>다른 탭과 공유돼요</small></label>
+          <textarea id="manitto-people" class="people-input" rows="8" spellcheck="false"></textarea>
+          <p class="hint people-count"></p>
+        </div>
+        <ul class="rules">
+          <li>자기 자신은 절대 걸리지 않아요.</li>
+          <li>두 사람이 서로를 챙기는 경우도 없어요.</li>
+          <li>결과는 각자 몰래 확인하거나, 개인 링크로 보내세요.</li>
+        </ul>
+        <div class="settings-actions">
+          <button class="btn btn-primary" id="manitto-make" type="button">마니또 정하기</button>
+          <button class="btn btn-ghost" id="manitto-reveal-all" type="button" disabled>전체 결과 보기</button>
+        </div>
+      </aside>
+
+      <div class="stage card">
+        <div class="stage-head" id="manitto-head" hidden>
+          <div class="status" id="manitto-status" aria-live="polite"></div>
+          <div class="progress" aria-hidden="true"><span id="manitto-progress"></span></div>
+        </div>
+        <div class="manitto-grid" id="manitto-grid"></div>
+        <div class="manitto-chain" id="manitto-chain" hidden></div>
+      </div>
+    </section>
   </main>
 
   <footer class="footer wrap">
     <p>결과는 <code>crypto.getRandomValues</code>로 정해지며, 입력한 내용은 이 브라우저에만 저장됩니다.</p>
     <p><a href="https://github.com/dongpari21/jebi" target="_blank" rel="noopener">GitHub에서 소스 보기</a></p>
   </footer>
+
+  <dialog class="m-dialog" id="manitto-dialog" aria-labelledby="m-dialog-title">
+    <div class="m-step" data-step="1">
+      <span class="m-emoji" aria-hidden="true">🤫</span>
+      <h2 id="m-dialog-title"><span class="m-who"></span>님 차례예요</h2>
+      <p>주변 사람이 화면을 보고 있지 않은지 확인한 뒤 눌러주세요.</p>
+      <button class="btn btn-primary btn-xl" type="button" data-act="reveal">내 마니또 보기</button>
+      <button class="btn btn-ghost" type="button" data-act="close">닫기</button>
+    </div>
+    <div class="m-step" data-step="2" hidden>
+      <p><span class="m-who"></span>님이 몰래 챙겨줄 사람은</p>
+      <div class="paper m-paper">
+        <span class="paper-no">MANITTO</span>
+        <span class="paper-name m-target"></span>
+      </div>
+      <p class="hint">들키지 않게 잘 챙겨주세요! 창을 닫으면 다시 가려져요.</p>
+      <button class="btn btn-primary" type="button" data-act="done">확인했어요</button>
+    </div>
+  </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
