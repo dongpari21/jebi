@@ -383,6 +383,37 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .m-paper { align-items: center; min-width: 220px; margin: 10px 0 6px; }
 .m-paper .paper-name { font-size: 34px; }
 
+/* 비대면(링크) 모드 */
+.steps { margin: 0 0 14px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.step { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line); }
+.step .field { margin-bottom: 0; }
+.step .field input[type="text"], .step .field textarea { background: var(--card); }
+.step-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; letter-spacing: -.02em; }
+.step-no { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 800; }
+.btn-block { width: 100%; }
+.m-card.is-warn { border-color: var(--accent); }
+.m-card.is-warn .m-state { color: var(--accent); font-weight: 650; }
+.secure-note { display: flex; gap: 10px; align-items: flex-start; margin-top: 20px; padding: 14px 16px; border-radius: 14px; background: var(--bg); font-size: 13px; color: var(--ink-2); }
+.secure-note p { margin: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.join-form { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.join-form input {
+  width: 100%; height: 50px; padding: 0 14px; border-radius: 12px; text-align: center; font-size: 18px; font-weight: 700;
+  background: var(--bg); border: 1px solid var(--line); outline: none;
+}
+.join-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.code-box {
+  display: block; width: 100%; max-height: 96px; overflow: auto; padding: 10px 12px; border-radius: 10px;
+  background: var(--bg); border: 1px dashed var(--line-strong); font-size: 12px; line-height: 1.5; text-align: left;
+  word-break: break-all; user-select: all; -webkit-user-select: all;
+}
+.notice { padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--ink-2) !important; font-size: 13px; text-align: left; }
+.m-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+.m-event { font-size: 13px; font-weight: 700; color: var(--accent) !important; }
+.m-event:empty { display: none; }
+.n-message { line-height: 1.7; }
+
 /* ==========================================================================
    Footer, toast, confetti
    ========================================================================== */

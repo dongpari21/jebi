@@ -1,5 +1,9 @@
-import { randomInt, shuffle, sample, pick } from './random.js?v=3';
-import { burst } from './confetti.js?v=3';
+import { randomInt, shuffle, sample, pick } from './random.js?v=4';
+import { burst } from './confetti.js?v=4';
+import {
+  $, $$, reduceMotion, escapeHtml, toBase64Url, fromBase64Url, readHash, copyText, toast,
+} from './utils.js?v=4';
+import { initRemoteManitto } from './manitto-remote.js?v=4';
 
 /* ==========================================================================
    State
@@ -22,6 +26,7 @@ const DEFAULTS = {
   people: '김민준\n이서연\n박도윤\n최하은\n정시우\n강지아\n윤예준\n임수아',
   names: { count: 1, exclude: true },
   teams: { count: 2 },
+  manitto: { mode: 'local' },
 };
 
 const state = loadState();
@@ -34,9 +39,6 @@ let drawHistory = [];
 let lastTeams = null;
 let drawing = false;
 
-const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
-const $ = (sel, el = document) => el.querySelector(sel);
-const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 
 function loadState() {
   const merged = structuredClone(DEFAULTS);
@@ -73,62 +75,18 @@ function setPath(path, value) {
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
 /* ==========================================================================
    Share link (#s=base64url(JSON))
    ========================================================================== */
-function toBase64Url(bytes) {
-  let bin = '';
-  bytes.forEach((b) => { bin += String.fromCharCode(b); });
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-const fromBase64Url = (str) => Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 const jsonToBytes = (obj) => new TextEncoder().encode(JSON.stringify(obj));
 const bytesToJson = (bytes) => JSON.parse(new TextDecoder().decode(bytes));
 
 const encodeShare = (obj) => toBase64Url(jsonToBytes(obj));
 
-function readHash(prefix) {
-  const m = location.hash.match(new RegExp(`^#${prefix}=([\\w-]+)$`));
-  return m ? m[1] : null;
-}
-
 function readShareHash() {
   const data = readHash('s');
   if (!data) return null;
   try { return bytesToJson(fromBase64Url(data)); } catch { return null; }
-}
-
-async function copyText(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.append(ta);
-    ta.select();
-    const ok = document.execCommand('copy');
-    ta.remove();
-    return ok;
-  }
-}
-
-/* ==========================================================================
-   Toast
-   ========================================================================== */
-let toastTimer;
-function toast(msg) {
-  const el = $('#toast');
-  el.textContent = msg;
-  el.classList.add('is-visible');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('is-visible'), 2200);
 }
 
 /* ==========================================================================
@@ -178,6 +136,7 @@ const onChange = {
   board: () => scheduleBoardRebuild(),
   names: () => renderPool(),
   teams: () => {},
+  manitto: () => {},
 };
 
 function writeField(el) {
@@ -538,9 +497,6 @@ function initTeams() {
    자기 자신이나 서로를 챙기는 쌍(n≥3일 때)은 생기지 않는다.
    ========================================================================== */
 const MANITTO_KEY = 'jebi:manitto';
-// 개인 링크에서 이름이 그대로 읽히지 않도록 가볍게 섞는 용도 (암호화가 아님)
-const LINK_KEY = new TextEncoder().encode('jebi-manitto');
-const scramble = (bytes) => bytes.map((b, i) => b ^ LINK_KEY[i % LINK_KEY.length]);
 
 let manitto = loadManitto(); // { people, order, checked } | null
 let manittoRevealed = false;
@@ -621,9 +577,6 @@ function renderManitto() {
       <span class="m-info"><span class="m-name">${n}</span><span class="m-state">${checked ? '확인함' : '확인 전'}</span></span>
       <span class="m-actions">
         <button class="btn btn-sm btn-primary" type="button" data-act="open" data-name="${n}" ${stale ? 'disabled' : ''}>확인</button>
-        <button class="btn btn-sm btn-icon btn-ghost" type="button" data-act="link" data-name="${n}" title="개인 링크 복사" aria-label="${n}님 개인 링크 복사" ${stale ? 'disabled' : ''}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1 1M14 10a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1-1"/></svg>
-        </button>
       </span>
     </article>`;
   }).join('');
@@ -637,34 +590,15 @@ function renderManitto() {
   }
 }
 
-function openManittoDialog(giver, target, onDone) {
+function openManittoDialog(giver, target, onDone, title = '') {
   const dialog = $('#manitto-dialog');
+  $('.m-event', dialog).textContent = title;
   for (const el of $$('.m-who', dialog)) el.textContent = giver;
   $('.m-target', dialog).textContent = target;
   $('[data-step="1"]', dialog).hidden = false;
   $('[data-step="2"]', dialog).hidden = true;
   dialogDone = onDone;
   dialog.showModal();
-}
-
-function personalLink(name) {
-  const payload = toBase64Url(scramble(jsonToBytes({ g: name, t: targetOf(name) })));
-  return `${location.origin}${location.pathname}#m=${payload}`;
-}
-
-function openLinkFromHash() {
-  const data = readHash('m');
-  if (!data) return;
-  window.history.replaceState(null, '', location.pathname + location.search);
-  try {
-    const { g, t } = bytesToJson(scramble(fromBase64Url(data)));
-    if (typeof g === 'string' && typeof t === 'string') {
-      setTab('manitto');
-      openManittoDialog(g, t, null);
-      return;
-    }
-  } catch {}
-  toast('마니또 링크가 올바르지 않아요');
 }
 
 function initManitto() {
@@ -675,20 +609,15 @@ function initManitto() {
     renderManitto();
   });
 
-  $('#manitto-grid').addEventListener('click', async (e) => {
-    const btn = e.target.closest('button[data-act]');
+  $('#manitto-grid').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act="open"]');
     if (!btn || manittoStale()) return;
     const name = btn.dataset.name;
-    if (btn.dataset.act === 'open') {
-      openManittoDialog(name, targetOf(name), () => {
-        if (!manitto.checked.includes(name)) manitto.checked.push(name);
-        saveManitto();
-        renderManitto();
-      });
-    } else {
-      const ok = await copyText(personalLink(name));
-      toast(ok ? `${name}님 링크를 복사했어요. 본인에게만 보내주세요` : '복사에 실패했어요');
-    }
+    openManittoDialog(name, targetOf(name), () => {
+      if (!manitto.checked.includes(name)) manitto.checked.push(name);
+      saveManitto();
+      renderManitto();
+    });
   });
 
   const dialog = $('#manitto-dialog');
@@ -714,7 +643,7 @@ function initManitto() {
   });
 
   renderManitto();
-  openLinkFromHash();
+  initRemoteManitto({ setTab, openManittoDialog });
 }
 
 /* ==========================================================================

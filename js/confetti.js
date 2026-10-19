@@ -22,6 +22,8 @@ function palette() {
 
 export function burst(x = innerWidth / 2, y = innerHeight / 3, count = 110) {
   if (reduceMotion.matches) return;
+  const host = document.querySelector('dialog[open]') ?? document.body;
+  if (canvas.parentElement !== host) host.append(canvas);
   const colors = palette();
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
