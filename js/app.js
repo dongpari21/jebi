@@ -1,5 +1,5 @@
-import { randomInt, shuffle, sample, pick } from './random.js';
-import { burst } from './confetti.js';
+import { randomInt, shuffle, sample, pick } from './random.js?v=3';
+import { burst } from './confetti.js?v=3';
 
 /* ==========================================================================
    State
