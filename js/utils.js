@@ -23,7 +23,6 @@ export function readHash(prefix) {
   return m ? m[1] : null;
 }
 
-export const clearHash = () => window.history.replaceState(null, '', location.pathname + location.search);
 export const pageUrl = () => `${location.origin}${location.pathname}`;
 
 export async function copyText(text) {

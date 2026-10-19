@@ -8,7 +8,7 @@
 
 import { firebaseConfig } from './firebase-config.js?v=5';
 
-const SDK = 'https://www.gstatic.com/firebasejs/10.12.2';
+const SDK = 'https://www.gstatic.com/firebasejs/13.0.0';
 const ROOM_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 
 export const isConfigured = () => Boolean(firebaseConfig?.apiKey && firebaseConfig?.projectId);

@@ -18,24 +18,25 @@
 
 - **공정한 난수**: `Math.random` 대신 `crypto.getRandomValues`를 쓰고, 모듈로 편향이 생기지 않도록 rejection sampling을 적용했습니다. 섞기는 Fisher–Yates 알고리즘을 씁니다.
 - **마니또 배정**: 섞은 순서대로 참가자를 원형으로 이어(A→B→…→A) 배정합니다. 모든 배치가 같은 확률로 나오고, 3명 이상이면 자기 자신이나 서로를 챙기는 쌍이 생기지 않습니다.
-- **비대면 마니또 (서버 없음)**: 결과 링크를 받은 본인만 열 수 있습니다. 진행자도 결과를 볼 수 없습니다.
-  1. 참가자가 등록 링크를 열면 브라우저에서 ECDH(P-256) 키 쌍이 만들어집니다. 개인 키는 내보낼 수 없는(`extractable: false`) 상태로 IndexedDB에 보관되고, 공개 키는 등록 코드로 진행자에게 전달됩니다.
-  2. 진행자는 각자의 결과를 임시 키와 참가자 공개 키로 ECDH → HKDF-SHA256 → AES-GCM 암호화해 결과 링크를 만듭니다. 배정 결과는 화면에 표시되지도, 저장되지도 않습니다.
-  3. 결과 링크는 등록한 기기·브라우저의 개인 키로만 복호화됩니다. 링크가 다른 사람에게 전달돼도 열리지 않습니다.
+- **마니또 온라인 방**: 진행자가 방을 만들고 초대 링크를 보내면, 참가자는 이름만 입력하고 입장합니다. 진행자가 구성을 완료하면 각자 화면에 자기 마니또가 실시간으로 열립니다.
+  - Firebase 익명 로그인 + Cloud Firestore 실시간 구독(`onSnapshot`)
+  - 배정 결과는 `rooms/{id}/secrets/{uid}`에 저장되고, [보안 규칙](firestore.rules)으로 **본인만 읽을 수 있습니다**. 진행자도 남의 결과는 읽을 수 없고, 완료 후에는 결과 수정·추가 입장이 막힙니다.
 - **공유 링크**: 현재 설정을 URL 해시에 담아 공유합니다. 서버 없이 동작합니다.
 - **자동 저장**: 입력한 내용은 `localStorage`에 저장되어 새로고침해도 유지됩니다.
 - **다크 모드**, **반응형 레이아웃**, **키보드 탭 이동**, `prefers-reduced-motion` 대응
 
 ## 기술 스택
 
-빌드 도구나 프레임워크 없이 **HTML, CSS, JavaScript(ES Modules)** 로만 만들었습니다.
+빌드 도구나 프레임워크 없이 **HTML, CSS, JavaScript(ES Modules)** 로 만들었고, 마니또 온라인 방에만 **Firebase**(Auth, Firestore)를 사용합니다. Firebase SDK는 온라인 방을 열 때만 불러옵니다.
 
 ```
 index.html
 css/style.css          디자인 토큰(라이트/다크), 레이아웃, 애니메이션
 js/app.js              상태 관리, 폼 바인딩, 네 가지 뽑기 모드
-js/manitto-remote.js   비대면 마니또 (진행자 단계별 화면, 참가 등록·결과 확인)
-js/secret.js           ECDH/HKDF/AES-GCM 암호화, IndexedDB 키 보관
+js/manitto-room.js     마니또 온라인 방 (진행자 관리 화면, 참가자 방 화면)
+js/room-api.js         Firebase 데이터 계층 (익명 로그인, 방·참가자·결과)
+js/firebase-config.js  Firebase 웹 앱 설정
+firestore.rules        Firestore 보안 규칙
 js/utils.js            DOM·인코딩·공유 유틸
 js/random.js           암호학적 난수 유틸 (randomInt, shuffle, sample)
 js/confetti.js         의존성 없는 캔버스 컨페티
