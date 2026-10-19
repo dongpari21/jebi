@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>제비뽑기 — 공정한 랜덤 뽑기</title>
+  <meta name="description" content="당첨/꽝 뽑기판, 이름 뽑기, 팀 나누기를 한 곳에서. 암호학적 난수로 공정하게 뽑는 웹 제비뽑기.">
+  <meta name="theme-color" content="#F3EEE4">
+  <meta property="og:title" content="제비뽑기 — 공정한 랜덤 뽑기">
+  <meta property="og:description" content="당첨/꽝 뽑기판, 이름 뽑기, 팀 나누기를 한 곳에서.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://dongpari21.github.io/jebi/assets/preview.png">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    // 첫 페인트 전에 저장된 테마 적용 (깜빡임 방지)
+    try { const t = localStorage.getItem('jebi:theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
+  </script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="제비뽑기 홈">
+      <span class="seal" aria-hidden="true">제비</span>
+      <span class="brand-name">제비뽑기</span>
+    </a>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost" id="share-btn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1 1M14 10a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1-1"/></svg>
+        <span>공유 링크</span>
+      </button>
+      <button class="btn btn-icon" id="theme-btn" type="button" aria-label="다크 모드 전환">
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <h1>오늘의 운, <em>공정하게</em> 뽑아요</h1>
+      <p>뽑기판에서 한 장씩 펼치거나, 이름을 뽑거나, 팀을 나눠보세요.<br class="br-desktop"> 모든 결과는 브라우저의 암호학적 난수로 정해집니다.</p>
+    </section>
+
+    <nav class="tabs" role="tablist" aria-label="뽑기 종류">
+      <button class="tab" role="tab" id="tab-board" aria-controls="panel-board" data-tab="board">
+        <span class="tab-emoji" aria-hidden="true">🎟️</span>뽑기판
+      </button>
+      <button class="tab" role="tab" id="tab-names" aria-controls="panel-names" data-tab="names">
+        <span class="tab-emoji" aria-hidden="true">🫙</span>이름 뽑기
+      </button>
+      <button class="tab" role="tab" id="tab-teams" aria-controls="panel-teams" data-tab="teams">
+        <span class="tab-emoji" aria-hidden="true">🧩</span>팀 나누기
+      </button>
+      <span class="tab-indicator" aria-hidden="true"></span>
+    </nav>
+
+    <!-- 뽑기판 -->
+    <section class="panel" role="tabpanel" id="panel-board" aria-labelledby="tab-board">
+      <aside class="card settings">
+        <h2 class="card-title">뽑기판 설정</h2>
+
+        <div class="segmented" role="radiogroup" aria-label="제비 구성 방식">
+          <label><input type="radio" name="board-mode" value="win" data-bind="board.mode"><span>당첨 / 꽝</span></label>
+          <label><input type="radio" name="board-mode" value="custom" data-bind="board.mode"><span>직접 입력</span></label>
+        </div>
+
+        <div class="field-group" data-show-if="board.mode=win">
+          <div class="field">
+            <label for="board-total">전체 제비</label>
+            <div class="stepper">
+              <button type="button" data-step="-1" aria-label="줄이기">−</button>
+              <input id="board-total" type="number" min="2" max="60" inputmode="numeric" data-bind="board.total">
+              <button type="button" data-step="1" aria-label="늘리기">+</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="board-winners">당첨 개수</label>
+            <div class="stepper">
+              <button type="button" data-step="-1" aria-label="줄이기">−</button>
+              <input id="board-winners" type="number" min="1" max="60" inputmode="numeric" data-bind="board.winners">
+              <button type="button" data-step="1" aria-label="늘리기">+</button>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="board-win-text">당첨 문구</label>
+              <input id="board-win-text" type="text" maxlength="12" data-bind="board.winText">
+            </div>
+            <div class="field">
+              <label for="board-lose-text">꽝 문구</label>
+              <input id="board-lose-text" type="text" maxlength="12" data-bind="board.loseText">
+            </div>
+          </div>
+        </div>
+
+        <div class="field-group" data-show-if="board.mode=custom">
+          <div class="field">
+            <label for="board-items">제비 내용 <small>한 줄에 하나 · <code>꽝*3</code>처럼 개수 지정</small></label>
+            <textarea id="board-items" rows="7" data-bind="board.items" spellcheck="false"></textarea>
+            <p class="hint" id="board-items-hint"></p>
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button class="btn btn-primary" id="board-shuffle" type="button">제비 다시 섞기</button>
+          <button class="btn btn-ghost" id="board-reveal-all" type="button">모두 펼치기</button>
+        </div>
+      </aside>
+
+      <div class="stage card">
+        <div class="stage-head">
+          <div class="status" id="board-status" aria-live="polite"></div>
+          <div class="progress" aria-hidden="true"><span id="board-progress"></span></div>
+        </div>
+        <div class="slip-grid" id="slip-grid"></div>
+        <div class="board-log-wrap">
+          <h3 class="mini-title">펼친 순서</h3>
+          <ol class="board-log" id="board-log"></ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- 이름 뽑기 -->
+    <section class="panel" role="tabpanel" id="panel-names" aria-labelledby="tab-names" hidden>
+      <aside class="card settings">
+        <h2 class="card-title">참가자</h2>
+        <div class="field">
+          <label for="names-people">이름 <small>줄바꿈 또는 쉼표로 구분</small></label>
+          <textarea id="names-people" class="people-input" rows="8" spellcheck="false"></textarea>
+          <p class="hint people-count"></p>
+        </div>
+        <div class="field">
+          <label for="names-count">한 번에 뽑을 인원</label>
+          <div class="stepper">
+            <button type="button" data-step="-1" aria-label="줄이기">−</button>
+            <input id="names-count" type="number" min="1" max="50" inputmode="numeric" data-bind="names.count">
+            <button type="button" data-step="1" aria-label="늘리기">+</button>
+          </div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-bind="names.exclude">
+          <span class="switch-track" aria-hidden="true"></span>
+          <span>이미 뽑힌 사람은 제외</span>
+        </label>
+        <div class="settings-actions">
+          <button class="btn btn-ghost" id="names-reset" type="button">기록 초기화</button>
+        </div>
+      </aside>
+
+      <div class="stage card names-stage">
+        <div class="jar-area">
+          <svg class="jar" id="jar" viewBox="0 0 200 220" aria-hidden="true">
+            <ellipse class="jar-inner" cx="100" cy="72" rx="68" ry="15"/>
+            <g class="jar-slips">
+              <rect x="62" y="22" width="15" height="62" rx="3" transform="rotate(-16 70 60)"/>
+              <rect x="84" y="10" width="15" height="70" rx="3" transform="rotate(-4 92 60)"/>
+              <rect x="104" y="16" width="15" height="66" rx="3" transform="rotate(8 112 60)"/>
+              <rect x="122" y="28" width="15" height="56" rx="3" transform="rotate(20 130 60)"/>
+              <rect x="74" y="34" width="15" height="50" rx="3" transform="rotate(4 82 60)"/>
+            </g>
+            <path class="jar-body" d="M32 72 V188 Q32 208 100 208 Q168 208 168 188 V72 A68 15 0 0 1 32 72 Z"/>
+            <path class="jar-rim" d="M32 72 A68 15 0 0 0 168 72"/>
+            <path class="jar-band" d="M32 100 Q100 116 168 100"/>
+            <rect class="jar-seal" x="76" y="128" width="48" height="48" rx="8"/>
+            <text class="jar-seal-text" x="100" y="158" text-anchor="middle">뽑기</text>
+          </svg>
+          <div class="ticker" id="ticker" aria-hidden="true"></div>
+          <button class="btn btn-primary btn-xl" id="names-draw" type="button">뽑기!</button>
+          <p class="hint" id="pool-hint"></p>
+        </div>
+
+        <div class="names-result">
+          <div class="result-papers" id="result-papers" aria-live="polite"></div>
+          <div>
+            <h3 class="mini-title">뽑기 기록</h3>
+            <ol class="history" id="names-history"></ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 팀 나누기 -->
+    <section class="panel" role="tabpanel" id="panel-teams" aria-labelledby="tab-teams" hidden>
+      <aside class="card settings">
+        <h2 class="card-title">참가자</h2>
+        <div class="field">
+          <label for="teams-people">이름 <small>이름 뽑기 탭과 공유돼요</small></label>
+          <textarea id="teams-people" class="people-input" rows="8" spellcheck="false"></textarea>
+          <p class="hint people-count"></p>
+        </div>
+        <div class="field">
+          <label for="teams-count">팀 개수</label>
+          <div class="stepper">
+            <button type="button" data-step="-1" aria-label="줄이기">−</button>
+            <input id="teams-count" type="number" min="2" max="12" inputmode="numeric" data-bind="teams.count">
+            <button type="button" data-step="1" aria-label="늘리기">+</button>
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button class="btn btn-primary" id="teams-make" type="button">팀 나누기</button>
+          <button class="btn btn-ghost" id="teams-copy" type="button" disabled>결과 복사</button>
+        </div>
+      </aside>
+
+      <div class="stage card">
+        <div class="team-grid" id="team-grid">
+          <div class="empty">
+            <span class="empty-emoji" aria-hidden="true">🧩</span>
+            <p>참가자를 입력하고 <b>팀 나누기</b>를 눌러보세요.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer wrap">
+    <p>결과는 <code>crypto.getRandomValues</code>로 정해지며, 입력한 내용은 이 브라우저에만 저장됩니다.</p>
+    <p><a href="https://github.com/dongpari21/jebi" target="_blank" rel="noopener">GitHub에서 소스 보기</a></p>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
+</body>
+</html>
