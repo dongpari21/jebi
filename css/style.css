@@ -241,6 +241,34 @@ button { cursor: pointer; }
 .room-section { display: flex; flex-direction: column; gap: 12px; }
 .room-section .field { margin-bottom: 0; }
 .room-card { display: flex; flex-direction: column; gap: 2px; padding: 16px; border-radius: 14px; background: var(--sunken); border: 1px solid var(--line); }
+.room-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.room-tools { display: flex; gap: 4px; margin: -6px -6px 0 0; }
+.tool-btn {
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 9px;
+  background: transparent; color: var(--muted); transition: background-color .15s, color .15s;
+}
+.tool-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tool-btn:hover:not(:disabled) { background: var(--card); color: var(--ink); }
+.tool-btn.is-danger:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.tool-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* 내 방 목록 */
+.room-list-wrap { margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px dashed var(--line); }
+.room-list-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.room-list-head .card-title { margin: 0; }
+.room-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.room-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; text-align: left;
+  border-radius: 12px; border: 1px solid transparent; background: var(--sunken);
+  transition: border-color .15s, background-color .15s;
+}
+.room-item:hover { border-color: var(--line-strong); }
+.room-item.is-active { background: var(--card); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.room-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.room-dot.is-done { background: var(--green); }
+.room-item-text { display: flex; flex-direction: column; min-width: 0; }
+.room-item-name { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-item-meta { font-size: 12px; color: var(--muted); }
 .room-label { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
 .room-name { font-size: 19px; font-weight: 800; letter-spacing: -.02em; word-break: break-all; }
 .room-badge { align-self: flex-start; margin-top: 6px; padding: 3px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; }
@@ -287,6 +315,21 @@ body.is-room .site-main, body.is-room .footer { display: none; }
 .rv-chips li.is-me { border-color: var(--accent); color: var(--accent); }
 .rv-home { color: var(--muted); font-size: 14px; font-weight: 600; text-decoration: none; }
 .rv-home:hover { color: var(--accent); }
+
+/* 마니또 공개 투표 */
+.reveal-panel { margin-top: 20px; padding: 18px; border-radius: 16px; border: 1px dashed var(--line-strong); display: flex; flex-direction: column; gap: 10px; }
+.reveal-box { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 10px; padding: 18px 16px; border-radius: 16px; background: var(--sunken); text-align: left; }
+.reveal-box.is-open, .reveal-panel:has(.reveal-chain) { border: 1.5px solid var(--gold); background: color-mix(in srgb, var(--gold) 10%, var(--card)); }
+.reveal-title { margin: 0; font-size: 17px; letter-spacing: -.02em; }
+.vote-progress { display: flex; flex-direction: column; gap: 6px; }
+.vote-count { font-size: 14px; color: var(--muted); }
+.vote-count b { color: var(--ink); font-size: 18px; }
+.vote-progress .progress { margin-top: 0; }
+.vote-chips li { font-size: 13px; padding: 4px 10px; color: var(--muted); }
+.vote-chips li.is-voted { color: var(--green); border-color: var(--green); background: var(--green-soft); }
+.reveal-chain { grid-template-columns: 1fr; }
+.reveal-chain li { background: var(--card); animation: fade-up .4s ease backwards; animation-delay: calc(var(--i, 0) * 60ms); }
+.reveal-panel .reveal-chain { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 
 /* ==========================================================================
    이렇게 진행돼요

@@ -3,10 +3,12 @@
 // rooms/{roomId}                 { title, ownerUid, status: 'open' | 'done', createdAt }
 // rooms/{roomId}/members/{uid}   { name, joinedAt }      ← 방 참가자 누구나 읽기 가능 (명단)
 // rooms/{roomId}/secrets/{uid}   { target, title }       ← 본인(uid)만 읽기 가능 (firestore.rules)
+// rooms/{roomId}/reveals/{uid}   { name, target }        ← 공개에 동의한 사람의 결과. 전원 동의 전에는 아무도 못 읽음
+//   (rooms 문서의 memberCount = 참가 인원, revealVotes = 공개에 동의한 uid 목록)
 //
 // Firebase SDK는 마니또 방을 쓸 때만 동적으로 불러온다.
 
-import { firebaseConfig } from './firebase-config.js?v=6';
+import { firebaseConfig } from './firebase-config.js?v=7';
 
 const SDK = 'https://www.gstatic.com/firebasejs/13.0.0';
 const ROOM_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -83,8 +85,70 @@ export async function completeRoom(roomId, title, pairs) {
   for (const { giverUid, targetName } of pairs) {
     batch.set(fs.doc(db, 'rooms', roomId, 'secrets', giverUid), { target: targetName, title });
   }
-  batch.update(fs.doc(db, 'rooms', roomId), { status: 'done' });
+  batch.update(fs.doc(db, 'rooms', roomId), { status: 'done', memberCount: pairs.length });
   await batch.commit();
+}
+
+/** 내가 만든 방 목록 실시간 구독 (최근 생성 순) */
+export async function watchMyRooms(cb, onError) {
+  const { uid, db, fs } = await connect();
+  const q = fs.query(fs.collection(db, 'rooms'), fs.where('ownerUid', '==', uid));
+  return fs.onSnapshot(q, (snap) => {
+    const rooms = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const time = (r) => r.createdAt?.toMillis?.() ?? Date.now();
+    cb(rooms.sort((a, b) => time(b) - time(a)));
+  }, onError);
+}
+
+export async function countMembers(roomId) {
+  const { db, fs } = await connect();
+  const snap = await fs.getCountFromServer(fs.collection(db, 'rooms', roomId, 'members'));
+  return snap.data().count;
+}
+
+export async function renameRoom(roomId, title) {
+  const { db, fs } = await connect();
+  await fs.updateDoc(fs.doc(db, 'rooms', roomId), { title });
+}
+
+/** 방과 참가자 명단·배정 결과를 한 번에 삭제한다 (하위 문서는 자동으로 지워지지 않으므로 직접 지움) */
+export async function deleteRoom(roomId) {
+  const { db, fs } = await connect();
+  const members = await fs.getDocs(fs.collection(db, 'rooms', roomId, 'members'));
+  const batch = fs.writeBatch(db);
+  for (const m of members.docs) {
+    batch.delete(fs.doc(db, 'rooms', roomId, 'secrets', m.id));
+    batch.delete(fs.doc(db, 'rooms', roomId, 'reveals', m.id));
+    batch.delete(m.ref);
+  }
+  batch.delete(fs.doc(db, 'rooms', roomId));
+  await batch.commit();
+}
+
+/**
+ * 전체 공개에 동의(agree=true)하거나 동의를 취소한다.
+ * 동의하면 내 결과를 공개 대기함(reveals)에 넣는다. 전원이 동의하기 전에는 누구도 읽을 수 없다.
+ */
+export async function voteReveal(roomId, agree, { name, target } = {}) {
+  const { uid, db, fs } = await connect();
+  const batch = fs.writeBatch(db);
+  const roomRef = fs.doc(db, 'rooms', roomId);
+  const revealRef = fs.doc(db, 'rooms', roomId, 'reveals', uid);
+  if (agree) {
+    batch.set(revealRef, { name, target });
+    batch.update(roomRef, { revealVotes: fs.arrayUnion(uid) });
+  } else {
+    batch.delete(revealRef);
+    batch.update(roomRef, { revealVotes: fs.arrayRemove(uid) });
+  }
+  await batch.commit();
+}
+
+/** 전원 동의 후 공개된 전체 명단 */
+export async function getReveals(roomId) {
+  const { db, fs } = await connect();
+  const snap = await fs.getDocs(fs.collection(db, 'rooms', roomId, 'reveals'));
+  return snap.docs.map((d) => d.data());
 }
 
 /** 내 마니또. 보안 규칙상 본인 문서만 읽을 수 있다. */

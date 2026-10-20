@@ -10,14 +10,14 @@
   <meta property="og:description" content="초대 링크로 모이고, 각자 자기 마니또만 몰래 확인하세요.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="https://dongpari21.github.io/jebi/assets/preview.png">
-  <link rel="icon" href="assets/favicon.svg?v=6" type="image/svg+xml">
+  <link rel="icon" href="assets/favicon.svg?v=7" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="css/style.css?v=6">
+  <link rel="stylesheet" href="css/style.css?v=7">
   <script>
     // 첫 페인트 전에 저장된 테마 적용 (깜빡임 방지)
     try { const t = localStorage.getItem('jebi:theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
   </script>
-  <script type="module" src="js/app.js?v=6"></script>
+  <script type="module" src="js/app.js?v=7"></script>
 </head>
 <body>
   <header class="topbar">
@@ -90,6 +90,14 @@
       <!-- 온라인 방 (진행자) -->
       <section class="panel" role="tabpanel" id="panel-room" aria-labelledby="tab-room">
         <aside class="card settings">
+          <div class="room-list-wrap" id="room-list-wrap" hidden>
+            <div class="room-list-head">
+              <h2 class="card-title">내 방</h2>
+              <button class="btn btn-sm btn-ghost" id="room-new" type="button">+ 새 방</button>
+            </div>
+            <ul class="room-list" id="room-list"></ul>
+          </div>
+
           <form class="room-section" id="room-create-form">
             <h2 class="card-title">새 마니또 방</h2>
             <div class="field">
@@ -97,12 +105,23 @@
               <input id="room-title" type="text" maxlength="30" placeholder="예: 3반 크리스마스 마니또">
             </div>
             <button class="btn btn-primary" id="room-create-btn" type="submit">방 만들기</button>
+            <button class="btn btn-ghost" id="room-create-cancel" type="button" hidden>취소</button>
             <p class="hint">방을 만들면 초대 링크가 생겨요. 링크를 받은 사람이 이름을 입력하고 들어와요.</p>
           </form>
 
           <div class="room-section" id="room-manage" hidden>
             <div class="room-card">
-              <span class="room-label">내 방</span>
+              <div class="room-card-head">
+                <span class="room-label">관리 중인 방</span>
+                <span class="room-tools">
+                  <button class="tool-btn" id="room-rename" type="button" title="방 이름 바꾸기" aria-label="방 이름 바꾸기">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>
+                  </button>
+                  <button class="tool-btn is-danger" id="room-delete" type="button" title="방 삭제" aria-label="방 삭제">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg>
+                  </button>
+                </span>
+              </div>
               <strong class="room-name" id="room-name"></strong>
               <span class="room-badge" id="room-badge"></span>
             </div>
@@ -126,10 +145,10 @@
 
             <div class="room-actions" id="room-done-actions" hidden>
               <button class="btn btn-primary" id="room-my-manitto" type="button" hidden>내 마니또 확인하기</button>
+              <button class="btn btn-ghost" id="room-my-vote" type="button" hidden>나도 공개에 동의하기</button>
               <p class="hint">참가자들은 초대 링크를 열었던 화면에서 바로 자기 마니또를 확인할 수 있어요.</p>
             </div>
 
-            <button class="btn btn-ghost btn-block" id="room-new" type="button">새 방 만들기</button>
           </div>
           <p class="hint is-error" id="room-error" hidden></p>
         </aside>
@@ -139,9 +158,10 @@
             <div class="status" id="room-status" aria-live="polite"></div>
           </div>
           <div class="member-grid" id="room-members"></div>
+          <section class="reveal-panel" id="room-reveal" hidden></section>
           <div class="secure-note">
             <span aria-hidden="true">🔒</span>
-            <p>방 구성을 완료하면 각자 <b>자기 마니또만</b> 볼 수 있어요. 진행자 화면에도 결과는 표시되지 않고, 서버 보안 규칙으로 남의 결과는 읽을 수 없게 막혀 있어요.</p>
+            <p>방 구성을 완료하면 각자 <b>자기 마니또만</b> 볼 수 있어요. 진행자 화면에도 결과는 표시되지 않고, 서버 보안 규칙으로 남의 결과는 읽을 수 없게 막혀 있어요. 전체 명단은 <b>참가자 전원이 동의</b>했을 때만 공개돼요.</p>
           </div>
         </div>
       </section>

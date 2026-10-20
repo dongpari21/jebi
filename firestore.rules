@@ -1,32 +1,70 @@
 rules_version = '2';
 
 // 마니또 방 보안 규칙
-// - 방 ID를 아는 사람(초대 링크)만 방과 참가자 명단을 볼 수 있다. 방 목록 조회는 불가.
+// - 방 ID를 아는 사람(초대 링크)만 방과 참가자 명단을 볼 수 있다. 방 목록은 자기가 만든 방만 조회 가능.
 // - 참가자는 자기 이름만 등록·수정·삭제할 수 있고, 방이 닫히면 더 이상 바꿀 수 없다.
-// - 배정 결과(secrets)는 본인만 읽을 수 있다. 진행자도 남의 결과는 읽을 수 없다.
+// - 배정 결과(secrets)는 본인만 읽을 수 있다. 방장도 남의 결과는 읽을 수 없다.
+// - 전체 공개(reveals)는 참가자 전원이 동의(revealVotes)했을 때만 읽을 수 있다.
+// - 방장은 방 이름을 바꾸거나, 방을 명단·결과와 함께 삭제할 수 있다.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     match /rooms/{roomId} {
       function signedIn() { return request.auth != null; }
-      function room() { return get(/databases/$(database)/documents/rooms/$(roomId)).data; }
+      function roomPath() { return /databases/$(database)/documents/rooms/$(roomId); }
+      function room() { return get(roomPath()).data; }
+      function roomAfter() { return getAfter(roomPath()).data; }
       function isOwner() { return signedIn() && request.auth.uid == room().ownerUid; }
       function isOpen() { return room().status == 'open'; }
+      function memberPath(uid) { return /databases/$(database)/documents/rooms/$(roomId)/members/$(uid); }
+      function revealPath(uid) { return /databases/$(database)/documents/rooms/$(roomId)/reveals/$(uid); }
+      function isMember() { return signedIn() && exists(memberPath(request.auth.uid)); }
+      function votesOf(data) { return data.get('revealVotes', []); }
+      function allAgreed(data) {
+        return data.get('memberCount', 0) > 0 && votesOf(data).size() >= data.memberCount;
+      }
 
       allow get: if signedIn();
-      allow list: if false;
+      // 내 방 목록: where('ownerUid', '==', 내 uid) 쿼리만 허용
+      allow list: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['title', 'ownerUid', 'status', 'createdAt'])
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.status == 'open'
         && request.resource.data.title is string
         && request.resource.data.title.size() <= 30;
-      // 진행자는 방을 닫을 수만 있다 (open → done)
-      allow update: if signedIn()
-        && request.auth.uid == resource.data.ownerUid
-        && resource.data.status == 'open'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        && request.resource.data.status == 'done';
+
+      allow update: if signedIn() && (
+        // 방장: 구성 완료 (open → done, 참가 인원 기록)
+        (request.auth.uid == resource.data.ownerUid
+          && resource.data.status == 'open'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'memberCount'])
+          && request.resource.data.status == 'done'
+          && request.resource.data.memberCount is int
+          && request.resource.data.memberCount >= 3)
+        // 방장: 이름 바꾸기
+        || (request.auth.uid == resource.data.ownerUid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title'])
+          && request.resource.data.title is string
+          && request.resource.data.title.size() <= 30)
+        // 참가자: 공개 동의 (내 결과를 reveals에 함께 넣어야 함)
+        || (isMember()
+          && resource.data.status == 'done'
+          && !allAgreed(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revealVotes'])
+          && !(request.auth.uid in votesOf(resource.data))
+          && request.resource.data.revealVotes == votesOf(resource.data).concat([request.auth.uid])
+          && existsAfter(revealPath(request.auth.uid)))
+        // 참가자: 동의 취소 (전원 동의 전까지만, reveals에서 내 결과도 함께 빼야 함)
+        || (isMember()
+          && resource.data.status == 'done'
+          && !allAgreed(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revealVotes'])
+          && request.auth.uid in votesOf(resource.data)
+          && request.resource.data.revealVotes == votesOf(resource.data).removeAll([request.auth.uid])
+          && !existsAfter(revealPath(request.auth.uid)))
+      );
+      allow delete: if signedIn() && request.auth.uid == resource.data.ownerUid;
 
       match /members/{uid} {
         function validName() {
@@ -39,18 +77,37 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['name', 'joinedAt']) && validName();
         allow update: if signedIn() && request.auth.uid == uid && isOpen()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']) && validName();
-        allow delete: if (signedIn() && request.auth.uid == uid || isOwner()) && isOpen();
+        // 참가자는 방이 열려 있을 때만 나갈 수 있고, 방장은 내보내기·방 삭제를 위해 언제든 지울 수 있다
+        allow delete: if (signedIn() && request.auth.uid == uid && isOpen()) || isOwner();
       }
 
       match /secrets/{uid} {
         allow get: if signedIn() && request.auth.uid == uid;
         allow list: if false;
-        // 진행자가 방을 닫는 일괄 쓰기에서만, 실제 참가자에게만 쓸 수 있다
+        // 방장이 방을 닫는 일괄 쓰기에서만, 실제 참가자에게만 쓸 수 있다
         allow create: if isOwner() && isOpen()
-          && getAfter(/databases/$(database)/documents/rooms/$(roomId)).data.status == 'done'
-          && exists(/databases/$(database)/documents/rooms/$(roomId)/members/$(uid))
+          && roomAfter().status == 'done'
+          && exists(memberPath(uid))
           && request.resource.data.keys().hasOnly(['target', 'title']);
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if isOwner(); // 방 삭제 시 함께 지움 (읽기는 여전히 본인만)
+      }
+
+      // 공개 대기함: 동의한 사람이 자기 결과를 넣고, 전원이 동의해야 읽을 수 있다
+      match /reveals/{uid} {
+        allow read: if signedIn() && (isMember() || isOwner()) && allAgreed(room());
+        // 내 진짜 결과·이름과 같아야 하고, 같은 일괄 쓰기에서 동의 표시도 해야 한다
+        allow create: if signedIn() && request.auth.uid == uid
+          && room().status == 'done'
+          && request.resource.data.keys().hasOnly(['name', 'target'])
+          && request.resource.data.target == get(/databases/$(database)/documents/rooms/$(roomId)/secrets/$(uid)).data.target
+          && request.resource.data.name == get(memberPath(uid)).data.name
+          && uid in votesOf(roomAfter());
+        allow update: if false;
+        allow delete: if isOwner()
+          || (signedIn() && request.auth.uid == uid
+            && !allAgreed(room())
+            && !(uid in votesOf(roomAfter())));
       }
     }
   }
