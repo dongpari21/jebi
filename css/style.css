@@ -335,6 +335,11 @@ body.is-room .site-main, body.is-room .footer { display: none; }
 .role-tag { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 99px; background: var(--gold); color: #2A1E0A; font-size: 11px; font-weight: 800; vertical-align: 2px; }
 .m-card .m-actions .btn-sm:not(.btn-icon) { padding: 0 10px; font-size: 13px; }
 
+.no-permission { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; padding: 14px; border-radius: 14px; border: 1.5px solid var(--gold); background: color-mix(in srgb, var(--gold) 10%, var(--card)); }
+.no-permission code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.uid-row { display: flex; align-items: center; gap: 6px; }
+.uid-box { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px; background: var(--card); border: 1px dashed var(--line-strong); word-break: break-all; user-select: all; -webkit-user-select: all; }
+
 /* 재접속 */
 .rejoin-panel { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; padding: 16px; border-radius: 16px; border: 1.5px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--card)); }
 .rejoin-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }

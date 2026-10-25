@@ -1,9 +1,9 @@
 // 마니또 온라인 방: 진행자가 방을 만들고 → 참가자가 초대 링크로 입장 → 진행자가 구성 완료하면
 // 각 참가자는 자기 마니또만 확인할 수 있다.
-import { shuffle } from './random.js?v=8';
-import { burst } from './confetti.js?v=8';
-import { $, escapeHtml, pageUrl, shareOrCopy, toast } from './utils.js?v=8';
-import * as api from './room-api.js?v=8';
+import { shuffle } from './random.js?v=9';
+import { burst } from './confetti.js?v=9';
+import { $, escapeHtml, pageUrl, shareOrCopy, copyText, toast } from './utils.js?v=9';
+import * as api from './room-api.js?v=9';
 
 const ADMIN_KEY = 'jebi:room';
 const MIN_MEMBERS = 3;
@@ -159,6 +159,20 @@ function adminError(msg) {
   el.textContent = msg || '';
 }
 
+/** 이 브라우저가 방장·공동 방장이 아닌 방을 열었을 때: 공동 방장으로 등록할 수 있게 브라우저 ID를 보여준다 */
+function showNoPermission(room) {
+  const el = $('#room-no-permission');
+  el.hidden = false;
+  el.innerHTML = `
+    <h3 class="reveal-title">🔒 이 브라우저에는 관리 권한이 없어요</h3>
+    <p class="hint"><b>${escapeHtml(roomName(room))}</b>의 방장·공동 방장으로 등록된 브라우저가 아니에요.
+      기기나 브라우저(PC·휴대폰, 크롬·카카오톡 등)마다 ID가 달라요.</p>
+    <p class="hint">이 브라우저에서 관리하려면 원래 방장에게 공동 방장 지정을 부탁하거나,
+      Firebase 콘솔에서 이 방의 <code>admins</code> 배열에 아래 ID를 추가하세요.</p>
+    <div class="uid-row"><code class="uid-box">${escapeHtml(admin.uid)}</code>
+      <button class="btn btn-sm btn-ghost" type="button" data-copy-uid>복사</button></div>`;
+}
+
 function formatDate(ts) {
   const d = ts?.toDate?.();
   return d ? `${d.getMonth() + 1}월 ${d.getDate()}일` : '방금';
@@ -194,6 +208,8 @@ function renderAdmin() {
   const grid = $('#room-members');
   if (!managing) {
     $('#room-status').innerHTML = '';
+    $('#room-reveal').hidden = true;
+    $('#room-rejoins').hidden = true;
     grid.innerHTML = `<div class="empty"><span class="empty-emoji" aria-hidden="true">💌</span>
       <p>방을 만들고 초대 링크를 보내면<br>입장한 사람이 여기에 실시간으로 보여요.</p></div>`;
     return;
@@ -299,12 +315,14 @@ async function selectRoom(roomId) {
     keep(await api.watchRoom(roomId, (room) => {
       if (admin.roomId !== roomId) return;
       if (!room || (room.ownerUid !== admin.uid && !room.admins?.includes(admin.uid))) {
-        // 삭제됐거나 내 방이 아니면 다른 방으로
+        // 삭제됐거나 내 방이 아니면 다른 방으로. 관리 권한이 없는 방이면 이 브라우저 ID를 알려준다.
+        if (room) showNoPermission(room);
         const next = admin.rooms?.find((r) => r.id !== roomId)?.id ?? null;
         selectRoom(next);
         return;
       }
       admin.room = room;
+      $('#room-no-permission').hidden = true;
       renderAdmin();
     }, (err) => adminError(errorMessage(err))));
     keep(await api.watchMembers(roomId, (members) => {
@@ -450,6 +468,10 @@ function initAdmin() {
   $('#room-list').addEventListener('click', (e) => {
     const id = e.target.closest('[data-room]')?.dataset.room;
     if (id) selectRoom(id);
+  });
+  $('#room-no-permission').addEventListener('click', async (e) => {
+    if (!e.target.closest('[data-copy-uid]')) return;
+    toast((await copyText(admin.uid)) ? '이 브라우저 ID를 복사했어요' : '복사에 실패했어요');
   });
   $('#room-rename').addEventListener('click', renameRoom);
   $('#room-delete').addEventListener('click', deleteRoom);

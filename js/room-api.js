@@ -11,7 +11,7 @@
 //
 // Firebase SDK는 마니또 방을 쓸 때만 동적으로 불러온다.
 
-import { firebaseConfig } from './firebase-config.js?v=8';
+import { firebaseConfig } from './firebase-config.js?v=9';
 
 const SDK = 'https://www.gstatic.com/firebasejs/13.0.0';
 const ROOM_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
