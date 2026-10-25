@@ -1,7 +1,7 @@
-import { shuffle } from './random.js?v=9';
-import { burst } from './confetti.js?v=9';
-import { $, $$, reduceMotion, escapeHtml, toast } from './utils.js?v=9';
-import { initRoomManitto, activateRoomAdmin } from './manitto-room.js?v=9';
+import { shuffle } from './random.js?v=10';
+import { burst } from './confetti.js?v=10';
+import { $, $$, reduceMotion, escapeHtml, toast } from './utils.js?v=10';
+import { initRoomManitto, activateRoomAdmin } from './manitto-room.js?v=10';
 
 /* ==========================================================================
    State

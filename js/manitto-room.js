@@ -1,9 +1,9 @@
 // 마니또 온라인 방: 진행자가 방을 만들고 → 참가자가 초대 링크로 입장 → 진행자가 구성 완료하면
 // 각 참가자는 자기 마니또만 확인할 수 있다.
-import { shuffle } from './random.js?v=9';
-import { burst } from './confetti.js?v=9';
-import { $, escapeHtml, pageUrl, shareOrCopy, copyText, toast } from './utils.js?v=9';
-import * as api from './room-api.js?v=9';
+import { shuffle } from './random.js?v=10';
+import { burst } from './confetti.js?v=10';
+import { $, escapeHtml, pageUrl, shareOrCopy, copyText, toast } from './utils.js?v=10';
+import * as api from './room-api.js?v=10';
 
 const ADMIN_KEY = 'jebi:room';
 const MIN_MEMBERS = 3;
@@ -12,6 +12,9 @@ const MAX_MEMBERS = 50;
 let deps;
 
 const roomName = (room) => room?.title?.trim() || '마니또';
+/** 보안 규칙과 같은 기준: 원래 방장이거나 admins 배열에 들어 있어야 관리자 */
+const isManagerOf = (room, uid) =>
+  Boolean(room && uid) && (room.ownerUid === uid || (Array.isArray(room.admins) && room.admins.includes(uid)));
 const inviteUrl = (roomId) => `${pageUrl()}?room=${roomId}`;
 const duplicateNames = (members) =>
   [...new Set(members.map((m) => m.name).filter((n, i, a) => a.indexOf(n) !== i))];
@@ -167,8 +170,10 @@ function showNoPermission(room) {
     <h3 class="reveal-title">🔒 이 브라우저에는 관리 권한이 없어요</h3>
     <p class="hint"><b>${escapeHtml(roomName(room))}</b>의 방장·공동 방장으로 등록된 브라우저가 아니에요.
       기기나 브라우저(PC·휴대폰, 크롬·카카오톡 등)마다 ID가 달라요.</p>
-    <p class="hint">이 브라우저에서 관리하려면 원래 방장에게 공동 방장 지정을 부탁하거나,
-      Firebase 콘솔에서 이 방의 <code>admins</code> 배열에 아래 ID를 추가하세요.</p>
+    ${room.admins != null && !Array.isArray(room.admins)
+      ? `<p class="hint is-error">이 방의 <code>admins</code> 필드가 배열(array)이 아니에요. Firebase 콘솔에서 <code>admins</code>를 지우고 <b>유형을 array</b>로 다시 만든 뒤, 그 안에 아래 ID를 <b>string</b>으로 넣어주세요.</p>`
+      : `<p class="hint">이 브라우저에서 관리하려면 원래 방장에게 공동 방장 지정을 부탁하거나,
+      Firebase 콘솔에서 이 방의 <code>admins</code> 배열에 아래 ID를 추가하세요.</p>`}
     <div class="uid-row"><code class="uid-box">${escapeHtml(admin.uid)}</code>
       <button class="btn btn-sm btn-ghost" type="button" data-copy-uid>복사</button></div>`;
 }
@@ -314,7 +319,7 @@ async function selectRoom(roomId) {
   try {
     keep(await api.watchRoom(roomId, (room) => {
       if (admin.roomId !== roomId) return;
-      if (!room || (room.ownerUid !== admin.uid && !room.admins?.includes(admin.uid))) {
+      if (!room || !isManagerOf(room, admin.uid)) {
         // 삭제됐거나 내 방이 아니면 다른 방으로. 관리 권한이 없는 방이면 이 브라우저 ID를 알려준다.
         if (room) showNoPermission(room);
         const next = admin.rooms?.find((r) => r.id !== roomId)?.id ?? null;
@@ -358,7 +363,8 @@ async function watchRoomList() {
       admin.rooms = rooms;
       refreshCounts(rooms);
       // 선택된 방이 없거나 사라졌으면 가장 최근 방을 고른다
-      if (!admin.creating && (!admin.roomId || !rooms.some((r) => r.id === admin.roomId))) {
+      // 관리 중인 방이 없을 때만 자동으로 고른다 (방이 삭제되거나 권한이 없어지면 watchRoom 쪽에서 처리)
+      if (!admin.creating && !admin.roomId) {
         selectRoom(rooms[0]?.id ?? null);
       } else {
         renderAdmin();
@@ -562,7 +568,7 @@ function renderGuest() {
   const isAlias = Boolean(me) && uid !== guest.uid;
 
   $('#rv-title').textContent = room ? roomName(room) : '마니또 방';
-  const manages = Boolean(room) && (room.ownerUid === guest.uid || room.admins?.includes(guest.uid));
+  const manages = isManagerOf(room, guest.uid);
   $('#rv-manage').hidden = !manages;
   $('#rv-manage').href = `./?manage=${guest.roomId}`;
   $('#rv-members-wrap').hidden = !room;
