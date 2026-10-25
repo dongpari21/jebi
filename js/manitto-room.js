@@ -1,9 +1,9 @@
 // 마니또 온라인 방: 진행자가 방을 만들고 → 참가자가 초대 링크로 입장 → 진행자가 구성 완료하면
 // 각 참가자는 자기 마니또만 확인할 수 있다.
-import { shuffle } from './random.js?v=7';
-import { burst } from './confetti.js?v=7';
-import { $, escapeHtml, pageUrl, shareOrCopy, toast } from './utils.js?v=7';
-import * as api from './room-api.js?v=7';
+import { shuffle } from './random.js?v=8';
+import { burst } from './confetti.js?v=8';
+import { $, escapeHtml, pageUrl, shareOrCopy, toast } from './utils.js?v=8';
+import * as api from './room-api.js?v=8';
 
 const ADMIN_KEY = 'jebi:room';
 const MIN_MEMBERS = 3;
@@ -23,16 +23,24 @@ function errorMessage(err) {
   return '문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
 }
 
-function memberChips(members, myUid, { removable = false, votes = null } = {}) {
+function memberChips(members, myUid, { removable = false, votes = null, room = null, canGrant = false } = {}) {
+  const admins = room?.admins ?? [];
   return members.map((m, i) => {
     const voted = votes?.includes(m.uid);
     const state = votes ? (voted ? '공개 동의' : '동의 대기') : (m.uid === myUid ? '나' : `${i + 1}번째 입장`);
+    const role = m.uid === room?.ownerUid ? '방장' : admins.includes(m.uid) ? '공동 방장' : '';
+    const grant = canGrant && m.uid !== room?.ownerUid
+      ? `<button class="btn btn-sm btn-ghost" type="button" data-admin="${m.uid}">${admins.includes(m.uid) ? '방장 해제' : '공동 방장'}</button>`
+      : '';
+    const remove = removable
+      ? `<button class="btn btn-sm btn-icon btn-ghost" type="button" data-remove="${m.uid}" aria-label="${escapeHtml(m.name)} 내보내기" title="내보내기">✕</button>`
+      : '';
     return `
     <article class="m-card${m.uid === myUid ? ' is-me' : ''}${voted ? ' is-checked' : ''}" style="--i:${i}">
       <span class="m-avatar" aria-hidden="true">${voted ? '✓' : escapeHtml([...m.name][0])}</span>
-      <span class="m-info"><span class="m-name">${escapeHtml(m.name)}${m.uid === myUid && votes ? ' (나)' : ''}</span>
+      <span class="m-info"><span class="m-name">${escapeHtml(m.name)}${m.uid === myUid && votes ? ' (나)' : ''}${role ? ` <span class="role-tag">${role}</span>` : ''}</span>
         <span class="m-state">${state}</span></span>
-      ${removable ? `<span class="m-actions"><button class="btn btn-sm btn-icon btn-ghost" type="button" data-remove="${m.uid}" aria-label="${escapeHtml(m.name)} 내보내기" title="내보내기">✕</button></span>` : ''}
+      ${grant || remove ? `<span class="m-actions">${grant}${remove}</span>` : ''}
     </article>`;
   }).join('');
 }
@@ -84,14 +92,15 @@ function voteProgressHtml(info, members) {
       `<li class="${voted.has(m.uid) ? 'is-voted' : ''}">${voted.has(m.uid) ? '✓ ' : ''}${escapeHtml(m.name)}</li>`).join('')}</ul>`;
 }
 
+/** me.uid = 원래 참가자 uid (재접속 승인된 기기라면 내 uid와 다를 수 있다) */
 async function castVote(roomId, me, agree) {
   if (agree) {
-    const secret = await api.getMySecret(roomId);
+    const secret = await api.getMySecret(roomId, me.uid);
     if (!secret) throw new Error('no-secret');
-    await api.voteReveal(roomId, true, { name: me.name, target: secret.target });
+    await api.voteReveal(roomId, true, { name: me.name, target: secret.target }, me.uid);
     toast('공개에 동의했어요. 모두 동의하면 명단이 열려요');
   } else {
-    await api.voteReveal(roomId, false);
+    await api.voteReveal(roomId, false, {}, me.uid);
     toast('동의를 취소했어요');
   }
 }
@@ -103,9 +112,9 @@ function celebrateOnce(key, info) {
   seen.set(key, info.all);
 }
 
-async function revealMine(roomId, name, title) {
+async function revealMine(roomId, name, title, actingUid) {
   try {
-    const secret = await api.getMySecret(roomId);
+    const secret = await api.getMySecret(roomId, actingUid);
     if (!secret) {
       toast('내 마니또 정보를 찾지 못했어요. 진행자에게 문의해 주세요');
       return;
@@ -128,6 +137,7 @@ const admin = {
   roomId: null,       // 관리 중인 방
   room: null,
   members: [],
+  rejoins: [],
   unsub: [],
   selectToken: 0,
   busy: false,
@@ -160,7 +170,7 @@ function renderRoomList() {
   $('#room-new').disabled = admin.creating;
   $('#room-list').innerHTML = rooms.map((r) => {
     const count = r.id === admin.roomId ? admin.members.length : admin.counts.get(r.id);
-    const meta = [r.status === 'done' ? '구성 완료' : '입장 받는 중', count == null ? null : `${count}명`, formatDate(r.createdAt)]
+    const meta = [r.ownerUid !== admin.uid ? '공동 방장' : null, r.status === 'done' ? '구성 완료' : '입장 받는 중', count == null ? null : `${count}명`, formatDate(r.createdAt)]
       .filter(Boolean).join(' · ');
     const active = r.id === admin.roomId && !admin.creating;
     return `<li><button class="room-item${active ? ' is-active' : ''}" type="button" data-room="${r.id}" ${active ? 'aria-current="true"' : ''}>
@@ -196,8 +206,11 @@ function renderAdmin() {
   $('#room-name').textContent = roomName(room);
   $('#room-badge').textContent = open ? '입장 받는 중' : '구성 완료';
   $('#room-badge').classList.toggle('is-done', !open);
+  const isOwner = room.ownerUid === uid;
+  $('.room-label', $('#room-manage')).textContent = isOwner ? '관리 중인 방' : '관리 중인 방 · 공동 방장';
   $('#room-rename').disabled = busy;
   $('#room-delete').disabled = busy;
+  $('#room-delete').hidden = !isOwner;
   $('#room-open-actions').hidden = !open;
   $('#room-done-actions').hidden = open;
 
@@ -223,6 +236,8 @@ function renderAdmin() {
     ? `<span>입장 <b>${members.length}</b>명</span><span class="live-dot">실시간</span>`
     : `<span>참가 <b>${members.length}</b>명</span><span class="done">구성 완료 🎁 각자 자기 마니또만 볼 수 있어요</span>`;
 
+  renderRejoinPanel();
+
   const panel = $('#room-reveal');
   panel.hidden = !info.supported;
   if (info.supported) {
@@ -237,8 +252,27 @@ function renderAdmin() {
   }
 
   grid.innerHTML = members.length
-    ? memberChips(members, uid, { removable: open, votes: info.supported ? info.votes : null })
+    ? memberChips(members, uid, { removable: open, votes: info.supported ? info.votes : null, room, canGrant: isOwner })
     : '<div class="empty"><span class="empty-emoji" aria-hidden="true">📨</span><p>아직 입장한 사람이 없어요.<br><b>초대 링크 보내기</b>로 링크를 공유해 보세요.</p></div>';
+}
+
+function renderRejoinPanel() {
+  const box = $('#room-rejoins');
+  const pending = admin.rejoins.filter((r) => !r.approved);
+  const approved = admin.rejoins.filter((r) => r.approved);
+  box.hidden = !admin.rejoins.length;
+  if (box.hidden) return;
+  box.innerHTML = `
+    ${pending.length ? `<h3 class="reveal-title">🔄 재접속 요청 ${pending.length}건</h3>
+      <p class="hint">기기·브라우저가 바뀌어 마니또가 안 보이는 참가자가 보낸 요청이에요. 승인하면 그 기기에서 해당 참가자의 마니또를 볼 수 있으니, <b>단톡방 등에서 본인이 맞는지 꼭 확인</b>하고 승인하세요.</p>
+      <ul class="rejoin-list">${pending.map((r) => `
+        <li><span class="rejoin-name"><b>${escapeHtml(r.name)}</b>님으로 재접속 요청</span>
+          <span class="m-actions">
+            <button class="btn btn-sm btn-primary" type="button" data-approve="${r.newUid}">승인</button>
+            <button class="btn btn-sm btn-ghost" type="button" data-reject="${r.newUid}">거절</button>
+          </span></li>`).join('')}</ul>` : ''}
+    ${approved.length ? `<p class="hint">승인된 재접속: ${approved.map((r) => escapeHtml(r.name)).join(', ')}
+      ${approved.map((r) => `<button class="link-btn" type="button" data-reject="${r.newUid}">${escapeHtml(r.name)} 승인 취소</button>`).join(' · ')}</p>` : ''}`;
 }
 
 function stopWatching() {
@@ -255,7 +289,7 @@ async function selectRoom(roomId) {
   }
   stopWatching();
   const token = ++admin.selectToken;
-  Object.assign(admin, { roomId, room: null, members: [], creating: false });
+  Object.assign(admin, { roomId, room: null, members: [], rejoins: [], creating: false });
   saveAdminRoom(roomId);
   renderAdmin();
   if (!roomId) return;
@@ -264,7 +298,7 @@ async function selectRoom(roomId) {
   try {
     keep(await api.watchRoom(roomId, (room) => {
       if (admin.roomId !== roomId) return;
-      if (!room || room.ownerUid !== admin.uid) {
+      if (!room || (room.ownerUid !== admin.uid && !room.admins?.includes(admin.uid))) {
         // 삭제됐거나 내 방이 아니면 다른 방으로
         const next = admin.rooms?.find((r) => r.id !== roomId)?.id ?? null;
         selectRoom(next);
@@ -278,6 +312,11 @@ async function selectRoom(roomId) {
       admin.members = members;
       renderAdmin();
     }, (err) => adminError(errorMessage(err))));
+    keep(await api.watchRejoins(roomId, (rejoins) => {
+      if (admin.roomId !== roomId) return;
+      admin.rejoins = rejoins;
+      renderAdmin();
+    }, (err) => console.warn('rejoins unavailable', err)));
   } catch (err) {
     adminError(errorMessage(err));
   }
@@ -429,9 +468,35 @@ function initAdmin() {
   });
   $('#room-my-manitto').addEventListener('click', () => {
     const me = admin.members.find((m) => m.uid === admin.uid);
-    if (me) revealMine(admin.roomId, me.name, roomName(admin.room));
+    if (me) revealMine(admin.roomId, me.name, roomName(admin.room), me.uid);
+  });
+  $('#room-rejoins').addEventListener('click', (e) => {
+    const approveId = e.target.closest('[data-approve]')?.dataset.approve;
+    const rejectId = e.target.closest('[data-reject]')?.dataset.reject;
+    const req = admin.rejoins.find((r) => r.newUid === (approveId ?? rejectId));
+    if (!req) return;
+    if (approveId && confirm(`${req.name}님의 재접속을 승인할까요?\n승인하면 그 기기에서 ${req.name}님의 마니또를 볼 수 있어요. 본인이 맞는지 꼭 확인하세요.`)) {
+      withBusy(async () => { await api.approveRejoin(admin.roomId, approveId); toast(`${req.name}님 재접속을 승인했어요`); });
+    }
+    if (rejectId && confirm(req.approved ? `${req.name}님 재접속 승인을 취소할까요?` : `${req.name}님의 재접속 요청을 거절할까요?`)) {
+      withBusy(() => api.rejectRejoin(admin.roomId, rejectId));
+    }
   });
   $('#room-members').addEventListener('click', (e) => {
+    const adminUid = e.target.closest('[data-admin]')?.dataset.admin;
+    if (adminUid) {
+      const member = admin.members.find((m) => m.uid === adminUid);
+      const on = !(admin.room.admins ?? []).includes(adminUid);
+      if (member && confirm(on
+        ? `${member.name}님을 이 방의 공동 방장으로 지정할까요?\n재접속 승인, 내보내기, 구성 완료, 이름 바꾸기를 할 수 있게 돼요. (방 삭제는 불가)\n${member.name}님은 입장할 때 쓴 기기에서 사이트 첫 화면의 '온라인 방' 탭을 열면 관리할 수 있어요.`
+        : `${member.name}님의 공동 방장 권한을 해제할까요?`)) {
+        withBusy(async () => {
+          await api.setAdmin(admin.roomId, adminUid, on);
+          toast(on ? `${member.name}님을 공동 방장으로 지정했어요` : `${member.name}님의 공동 방장을 해제했어요`);
+        });
+      }
+      return;
+    }
     const uid = e.target.closest('[data-remove]')?.dataset.remove;
     const member = admin.members.find((m) => m.uid === uid);
     if (member && confirm(`${member.name}님을 방에서 내보낼까요?`)) {
@@ -442,7 +507,9 @@ function initAdmin() {
   renderAdmin();
   api.myUid().then((uid) => {
     admin.uid = uid;
-    const saved = loadAdminRoom();
+    // 참가자 화면의 '방장 화면으로 가기'(?manage=ID)로 왔으면 그 방을 연다
+    const wanted = new URLSearchParams(location.search).get('manage');
+    const saved = (wanted && /^[a-z0-9]{6,20}$/.test(wanted) ? wanted : null) ?? loadAdminRoom();
     if (saved) selectRoom(saved);
     watchRoomList();
   }).catch((err) => adminError(errorMessage(err)));
@@ -451,14 +518,31 @@ function initAdmin() {
 /* ==========================================================================
    참가자 (초대 링크 ?room=ID 로 열었을 때)
    ========================================================================== */
-const guest = { roomId: null, room: undefined, members: [], uid: null };
+const guest = { roomId: null, room: undefined, members: [], uid: null, rejoin: null };
+
+/** 이 기기가 행동하는 참가자 uid: 재접속이 승인됐으면 원래 참가자, 아니면 내 uid */
+const actingUid = () => (guest.rejoin?.approved ? guest.rejoin.memberUid : guest.uid);
+
+function rejoinPickerHtml(members) {
+  return `<div class="rejoin-box">
+      <h2 class="reveal-title">입장했었는데 내 화면이 안 보이나요?</h2>
+      <p class="hint">기기나 브라우저가 바뀌면 이렇게 보일 수 있어요. 먼저 <b>처음 입장할 때 쓴 앱</b>(카카오톡·사파리·크롬)으로 열어보고, 그래도 안 되면 내 이름을 골라 방장에게 재접속을 요청하세요.</p>
+      <ul class="rv-chips rejoin-names">${members.map((m) =>
+        `<li><button type="button" data-rejoin="${m.uid}">${escapeHtml(m.name)}</button></li>`).join('')}</ul>
+    </div>`;
+}
 
 function renderGuest() {
-  const { room, members, uid } = guest;
+  const { room, members } = guest;
+  const uid = actingUid();
   const body = $('#rv-body');
   const me = members.find((m) => m.uid === uid);
+  const isAlias = Boolean(me) && uid !== guest.uid;
 
   $('#rv-title').textContent = room ? roomName(room) : '마니또 방';
+  const manages = Boolean(room) && (room.ownerUid === guest.uid || room.admins?.includes(guest.uid));
+  $('#rv-manage').hidden = !manages;
+  $('#rv-manage').href = `./?manage=${guest.roomId}`;
   $('#rv-members-wrap').hidden = !room;
   $('#rv-count').textContent = `${members.length}명`;
   $('#rv-members').innerHTML = members.map((m) =>
@@ -468,6 +552,13 @@ function renderGuest() {
     body.innerHTML = '<p class="rv-text">방 정보를 불러오는 중…</p>';
   } else if (room === null) {
     body.innerHTML = '<p class="rv-text">방을 찾을 수 없어요.<br>진행자가 방을 삭제했거나 링크가 잘못됐어요.</p>';
+  } else if (!me && guest.rejoin && !guest.rejoin.approved) {
+    body.innerHTML = `
+      <div class="rv-state"><span class="rv-check is-wait" aria-hidden="true">…</span>
+        <p><b>${escapeHtml(guest.rejoin.name)}</b>님으로 재접속 요청 중</p></div>
+      <p class="rv-text">방장이 승인하면 이 화면에서 바로 마니또를 확인할 수 있어요.<br>방장에게 <b>"재접속 요청했어요"</b>라고 알려주세요.</p>
+      <div class="rv-waiting" aria-hidden="true"><span></span><span></span><span></span></div>
+      <button class="btn btn-ghost btn-block" type="button" data-act="cancel-rejoin">요청 취소</button>`;
   } else if (room.status === 'open' && !me) {
     if (!$('#rv-join-form')) {
       body.innerHTML = `
@@ -476,7 +567,10 @@ function renderGuest() {
           <label class="sr-only" for="rv-name">이름</label>
           <input id="rv-name" type="text" maxlength="20" placeholder="이름" autocomplete="name" required>
           <button class="btn btn-primary btn-xl" type="submit">입장하기</button>
-        </form>`;
+        </form>
+        <details class="rejoin-details" id="rv-rejoin-details"><summary>이미 입장했는데 다시 들어왔나요?</summary>${rejoinPickerHtml(members)}</details>`;
+    } else if (!$('#rv-rejoin-details')?.open) {
+      $('#rv-rejoin-details').innerHTML = `<summary>이미 입장했는데 다시 들어왔나요?</summary>${rejoinPickerHtml(members)}`;
     }
   } else if (room.status === 'open') {
     body.innerHTML = `
@@ -484,10 +578,10 @@ function renderGuest() {
         <p><b>${escapeHtml(me.name)}</b>님, 입장 완료!</p></div>
       <p class="rv-text">진행자가 방 구성을 마치면 이 화면에서 바로 확인할 수 있어요.<br>이 창을 닫았다면 <b>같은 기기·브라우저</b>로 초대 링크를 다시 열어주세요.</p>
       <div class="rv-waiting" aria-hidden="true"><span></span><span></span><span></span></div>
-      <div class="m-row">
+      ${isAlias ? '<p class="hint">방장 승인으로 이 기기에서 재접속했어요.</p>' : `<div class="m-row">
         <button class="btn btn-ghost" type="button" data-act="rename">이름 바꾸기</button>
         <button class="btn btn-ghost" type="button" data-act="leave">나가기</button>
-      </div>`;
+      </div>`}`;
   } else if (me) {
     const info = revealInfo(room);
     const iVoted = info.votes.includes(uid);
@@ -511,9 +605,10 @@ function renderGuest() {
     body.innerHTML = `
       <p class="rv-text"><b>${escapeHtml(me.name)}</b>님, 방 구성이 끝났어요!<br>주변에 보는 사람이 없을 때 눌러주세요 🤫</p>
       <button class="btn btn-primary btn-xl" type="button" data-act="reveal">내 마니또 확인하기</button>
-      ${revealBox}`;
+      ${revealBox}
+      ${isAlias ? '<p class="hint">방장 승인으로 이 기기에서 재접속했어요.</p>' : ''}`;
   } else {
-    body.innerHTML = `<p class="rv-text">이미 구성이 끝난 방이에요.<br>입장했었다면 <b>입장할 때 쓴 기기·브라우저</b>로 이 링크를 열어주세요.</p>`;
+    body.innerHTML = `<p class="rv-text">이미 구성이 끝난 방이에요.</p>${rejoinPickerHtml(members)}`;
   }
 }
 
@@ -536,6 +631,8 @@ async function startGuest(roomId) {
     guest.uid = await api.myUid();
     await api.watchRoom(roomId, (room) => { guest.room = room; renderGuest(); }, fail);
     await api.watchMembers(roomId, (members) => { guest.members = members; renderGuest(); }, fail);
+    await api.watchMyRejoin(roomId, (rejoin) => { guest.rejoin = rejoin; renderGuest(); },
+      (err) => console.warn('rejoin unavailable', err));
   } catch (err) {
     fail(err);
   }
@@ -561,9 +658,19 @@ async function startGuest(roomId) {
 
   $('#rv-body').addEventListener('click', async (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act;
-    const me = guest.members.find((m) => m.uid === guest.uid);
+    const me = guest.members.find((m) => m.uid === actingUid());
+    const rejoinUid = e.target.closest('[data-rejoin]')?.dataset.rejoin;
     try {
-      if (act === 'reveal' && me) await revealMine(roomId, me.name, roomName(guest.room));
+      if (rejoinUid) {
+        const target = guest.members.find((m) => m.uid === rejoinUid);
+        if (target && confirm(`${target.name}님으로 재접속을 요청할까요?\n방장이 본인인지 확인한 뒤 승인하면 이 기기에서 마니또를 확인할 수 있어요.`)) {
+          await api.requestRejoin(roomId, target.uid, target.name);
+          toast('재접속을 요청했어요. 방장에게 알려주세요');
+        }
+        return;
+      }
+      if (act === 'cancel-rejoin') await api.cancelRejoin(roomId);
+      if (act === 'reveal' && me) await revealMine(roomId, me.name, roomName(guest.room), me.uid);
       if (act === 'leave' && confirm('방에서 나갈까요?')) await api.removeMember(roomId);
       if ((act === 'vote' || act === 'unvote') && me) {
         e.target.closest('button').disabled = true;

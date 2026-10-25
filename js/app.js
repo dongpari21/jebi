@@ -1,7 +1,7 @@
-import { shuffle } from './random.js?v=7';
-import { burst } from './confetti.js?v=7';
-import { $, $$, reduceMotion, escapeHtml, toast } from './utils.js?v=7';
-import { initRoomManitto, activateRoomAdmin } from './manitto-room.js?v=7';
+import { shuffle } from './random.js?v=8';
+import { burst } from './confetti.js?v=8';
+import { $, $$, reduceMotion, escapeHtml, toast } from './utils.js?v=8';
+import { initRoomManitto, activateRoomAdmin } from './manitto-room.js?v=8';
 
 /* ==========================================================================
    State
@@ -16,6 +16,7 @@ const DEFAULTS = {
 };
 
 const state = loadState();
+if (new URLSearchParams(location.search).has('manage')) state.tab = 'room';
 
 function loadState() {
   try {

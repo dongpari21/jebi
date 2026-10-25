@@ -313,6 +313,7 @@ body.is-room .site-main, body.is-room .footer { display: none; }
 .rv-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .rv-chips li { padding: 5px 12px; border-radius: 99px; background: var(--sunken); border: 1px solid var(--line); font-size: 14px; font-weight: 600; animation: pop .3s ease backwards; }
 .rv-chips li.is-me { border-color: var(--accent); color: var(--accent); }
+.rv-manage { width: 100%; max-width: 440px; text-decoration: none; }
 .rv-home { color: var(--muted); font-size: 14px; font-weight: 600; text-decoration: none; }
 .rv-home:hover { color: var(--accent); }
 
@@ -330,6 +331,21 @@ body.is-room .site-main, body.is-room .footer { display: none; }
 .reveal-chain { grid-template-columns: 1fr; }
 .reveal-chain li { background: var(--card); animation: fade-up .4s ease backwards; animation-delay: calc(var(--i, 0) * 60ms); }
 .reveal-panel .reveal-chain { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+
+.role-tag { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 99px; background: var(--gold); color: #2A1E0A; font-size: 11px; font-weight: 800; vertical-align: 2px; }
+.m-card .m-actions .btn-sm:not(.btn-icon) { padding: 0 10px; font-size: 13px; }
+
+/* 재접속 */
+.rejoin-panel { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; padding: 16px; border-radius: 16px; border: 1.5px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--card)); }
+.rejoin-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rejoin-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+.rejoin-box { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 6px; padding: 16px; border-radius: 16px; background: var(--sunken); text-align: left; }
+.rejoin-names li { padding: 0; transition: border-color .15s, color .15s; }
+.rejoin-names button { padding: 5px 12px; border: 0; background: none; font: inherit; font-weight: 650; color: inherit; }
+.rejoin-names li:hover { border-color: var(--accent); color: var(--accent); }
+.rejoin-details { width: 100%; text-align: left; font-size: 14px; color: var(--muted); }
+.rejoin-details summary { cursor: pointer; text-align: center; padding: 6px; }
+.rv-check.is-wait { background: var(--gold); }
 
 /* ==========================================================================
    이렇게 진행돼요
